@@ -1,7 +1,6 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using System;
 using System.Runtime.InteropServices;
 
 namespace LeonsGameOfLife
@@ -13,28 +12,18 @@ namespace LeonsGameOfLife
         private Texture2D solid;
         private int gameTimer = 0;
         private float scale = 1;
+        private int gameSpeed = 10;
 
-        private KeyboardState lastKeyboard;
-        private MouseState Mouse => Microsoft.Xna.Framework.Input.Mouse.GetState();
-        private MouseState lastMouse;
-        private bool MouseWithinBounds => Mouse.X > 0 && Mouse.Y > 0 && Mouse.X < cells.GetLength(0) * cellWidth && Mouse.Y < cells.GetLength(1) * cellWidth;
-        private Point MouseCellPos => new Point((int)((Mouse.X - Mouse.X % cellWidth) / cellWidth / scale), (int)((Mouse.Y - Mouse.Y % cellWidth) / cellWidth / scale));
+        private bool MouseWithinBounds => Input.Mouse.X > 0 && Input.Mouse.Y > 0 && Input.Mouse.X < cells.GetLength(0) * cellWidth && Input.Mouse.Y < cells.GetLength(1) * cellWidth;
+        private Point MouseCellPos => new Point(
+            (int)((Input.Mouse.X - Input.Mouse.X % cellWidth) / cellWidth / scale),
+            (int)((Input.Mouse.Y - Input.Mouse.Y % cellWidth) / cellWidth / scale));
 
         private int[,] cells;
         private const int cellWidth = 2;
         private bool playing = false;
-
-        [DllImport("SDL2.dll", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void SDL_MaximizeWindow(IntPtr window);
-
-        private void MaximizeWindow()
-        {
-            graphics.PreferredBackBufferWidth = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
-            graphics.PreferredBackBufferHeight = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height - 50;
-            Window.Position = Point.Zero;
-            SDL_MaximizeWindow(Window.Handle);
-            graphics.ApplyChanges();
-        }
+        private bool drawCross = true;
+        private bool drawGrid = false;
 
         public LeonsGameOfLife()
         {
@@ -67,7 +56,7 @@ namespace LeonsGameOfLife
 
             UpdateInput();
 
-            if (playing && gameTimer % 10 == 0)
+            if (playing && gameTimer % gameSpeed == 0)
             {
                 var nextCells = new int[cells.GetLength(0), cells.GetLength(1)];
 
@@ -92,8 +81,8 @@ namespace LeonsGameOfLife
                 cells = nextCells;
             }
 
-            lastKeyboard = Keyboard.GetState();
-            lastMouse = Mouse;
+            Input.lastKeyboard = Input.Keyboard;
+            Input.lastMouse = Input.Mouse;
 
             base.Update(gameTime);
         }
@@ -108,12 +97,14 @@ namespace LeonsGameOfLife
 
             for (int x = 0; x < cells.GetLength(0); x++)
             {
-                // Draw Grid x
-                //spriteBatch.Draw(magicPixel, new Rectangle(x * cellWidth, 0, 1, cellWidth * cells.GetLength(1)), Color.Black);
                 for (int y = 0; y < cells.GetLength(1); y++)
                 {
                     // Draw Grid y
-                    //spriteBatch.Draw(magicPixel, new Rectangle(0, y * cellWidth, cellWidth * cells.GetLength(0), 1), Color.Black);
+                    if (drawGrid)
+                    {
+                        spriteBatch.Draw(solid, new Rectangle(x * cellWidth, y * cellWidth, 1, cellWidth), Color.Black);
+                        spriteBatch.Draw(solid, new Rectangle(0, y * cellWidth, cellWidth * cells.GetLength(0), 1), Color.Black);
+                    }
 
                     // Draw Cells
                     if (cells[x, y] == 1)
@@ -131,8 +122,11 @@ namespace LeonsGameOfLife
             spriteBatch.Draw(solid, new Rectangle(cellWidth * cells.GetLength(0), 0, 1, cellWidth * cells.GetLength(0)), Color.Black);
 
             // Draw Cross
-            spriteBatch.Draw(solid, new Rectangle(0, cellWidth * cells.GetLength(0) / 2, cellWidth * cells.GetLength(0), 1), Color.Red);
-            spriteBatch.Draw(solid, new Rectangle(cellWidth * cells.GetLength(1) / 2, 0, 1, cellWidth * cells.GetLength(0)), Color.Red);
+            if (drawCross)
+            {
+                spriteBatch.Draw(solid, new Rectangle(0, cellWidth * cells.GetLength(0) / 2, cellWidth * cells.GetLength(0), 1), Color.Red);
+                spriteBatch.Draw(solid, new Rectangle(cellWidth * cells.GetLength(1) / 2, 0, 1, cellWidth * cells.GetLength(0)), Color.Red);
+            }
 
             // Draw Mouse
             if (!playing && MouseWithinBounds)
@@ -145,6 +139,9 @@ namespace LeonsGameOfLife
             base.Draw(gameTime);
         }
 
+        /// <summary>
+        /// copied method
+        /// </summary>
         private int CountNeighbors(int i, int j)
         {
             var lives = 0;
@@ -168,31 +165,42 @@ namespace LeonsGameOfLife
 
         private void UpdateInput()
         {
-            if (!lastKeyboard.IsKeyDown(Keys.Space) && Keyboard.GetState().IsKeyDown(Keys.Space))
-            {
-                playing = !playing;
-            }
-            if (!lastKeyboard.IsKeyDown(Keys.R) && Keyboard.GetState().IsKeyDown(Keys.R))
-            {
-                cells = new int[cells.GetLength(0), cells.GetLength(1)];
-            }
+            Input.ToggleKeybind(Keys.Space, () => playing = !playing);
+            Input.ToggleKeybind(Keys.R, () => cells = new int[cells.GetLength(0), cells.GetLength(1)]);
+            Input.ToggleKeybind(Keys.S, () => scale = 1);
+            Input.ToggleKeybind(Keys.C, () => drawCross = !drawCross);
+            Input.ToggleKeybind(Keys.G, () => drawGrid = !drawGrid);
 
             if (!playing && MouseWithinBounds)
             {
-                if (Mouse.LeftButton == ButtonState.Pressed)
+                if (Input.Mouse.LeftButton == ButtonState.Pressed)
                 {
                     cells[MouseCellPos.X, MouseCellPos.Y] = 1;
                 }
-                else if (Mouse.RightButton == ButtonState.Pressed)
+                else if (Input.Mouse.RightButton == ButtonState.Pressed)
                 {
                     cells[MouseCellPos.X, MouseCellPos.Y] = 0;
                 }
             }
 
-            if (Mouse.ScrollWheelValue != 0)
+            if (Input.Mouse.ScrollWheelValue != 0)
             {
-                scale -= (lastMouse.ScrollWheelValue - Mouse.ScrollWheelValue) / 8000f;
+                scale -= (Input.lastMouse.ScrollWheelValue - Input.Mouse.ScrollWheelValue) / 8000f;
             }
+        }
+
+        [DllImport("SDL2.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SDL_MaximizeWindow(System.IntPtr window);
+
+        private void MaximizeWindow()
+        {
+            Window.Position = Point.Zero;
+
+            graphics.PreferredBackBufferWidth = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
+            graphics.PreferredBackBufferHeight = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height - 50;
+            SDL_MaximizeWindow(Window.Handle);
+
+            graphics.ApplyChanges();
         }
     }
 }
